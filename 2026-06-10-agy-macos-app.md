@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "[AI 實戰] 用 AGY CLI (Antigravity) 打造 macOS 應用程式的極速 AI 協同開發體驗"
-description: "紀錄如何透過 Google DeepMind 的 AGY CLI (Antigravity) 智慧代理，在命令列中進行 macOS 音訊擷取與 Gemini Live API 翻譯 App 的開發、Log 排查、問題修正與自動 Git 推送的全自動化開發體驗。"
+description: "紀錄如何透過 Google DeepMind 的 AGY CLI (Antigravity) 智慧代理，在命令列中從零設計、配置編譯環境、排查連線與多聲道音訊 Bug，並自動推送 GitHub 的 macOS 會議翻譯 App 開發心路歷程。"
 category:
 - AI
 - DeveloperExperience
@@ -21,87 +21,79 @@ tags: ["AGY CLI", "Antigravity", "AI Agent", "macOS", "Swift", "GitHub", "Pair P
 4. 得到修改建議後，複製回編輯器，手動測試。
 5. 重複以上步驟，直到修復，然後手動寫 `README.md`、寫部落格、建立 GitHub 倉庫、提交代碼並推送。
 
-而在這一次的開發中，我們採用了 Google DeepMind 設計的 **AGY CLI (Antigravity-CLI)** 代理人。我們驚訝地發現，上述所有繁瑣的上下文切換，都可以在終端機內透過與智慧代理的對話**全自動完成**。這篇文章將分享我們如何利用 AGY CLI 協同開發一個 macOS App 的真實體驗。
+而在這一次的開發中，我們採用了 Google DeepMind 設計的 **AGY CLI (Antigravity-CLI)** 代理人。我們驚訝地發現，上述所有繁瑣的上下文切換，都可以在終端機內透過與智慧代理的對話**全自動完成**。這篇文章將還原真實的 Prompt 對話流，分享我們如何與 AGY CLI 協作，從零打造出一個 macOS 會議翻譯 App。
 
 ---
 
-# 什麼是 AGY CLI (Antigravity)？
+# 階段一：靈感碰撞與架構設計
 
-**AGY CLI** 是一個具備自主代理能力（Agentic AI）的命令列編程助手。與一般的 Chatbot 不同，它擁有以下幾項核心的「手腳」（Tools）：
-- **程式碼閱讀與搜尋能力**：能自主檢視整個專案目錄的架構，並精確讀取特定程式檔案。
-- **檔案編輯與寫入能力**：支援單區塊與多區塊的精確程式碼替換，無須手動複製貼上。
-- **終端機指令執行權**：經由使用者確認後，能直接在本地運行編譯、打包、查看 log、執行 Git 操作等命令。
-- **高自主排錯思維**：能自行分析日誌，推導問題根源，並提出完整的修復方案。
+一切源自於一個開發想法與一份 Google 新釋出的 API 文件。開發者在終端機對 AGY CLI 貼上了網址，並拋出第一個核心問題：
 
----
+> **User**: 跟著這個範例，可能打造出一個 Mac OS App 可以收取電腦裡面的聲音，然後即時翻譯成其他語言? 開始幫我思考該怎麼做，我主要目的是要可以拿來開會 zoom / google meet 直接翻譯其他國家的語言成繁體中文。
+> 
+> 這邊有其他文件給你參考：https://ai.google.dev/gemini-api/docs/live-api/live-translate?hl=zh-tw
 
-# 實戰情境：MeetingTranslator 的排錯與建置
-
-在我們的 macOS 會議翻譯 App 測試中，我們在終端機執行了編譯好的二進位檔，但 WebSocket 連線隨即被伺服器切斷（CloseCode 1007 與 1008），且音訊發送全為靜音。
-
-此時，我們對 AGY CLI 下達了簡單的指令：
-> **User**: check log (幫我看 log)
-
-### 1. 自主定位與 Log 分析
-收到指令後，AGY CLI 自主搜尋了目錄，找到了生成的 `debug.log` 檔案，並在終端機背景呼叫 `tail -n 150 debug.log` 進行檢索。
-
-它迅速抓出了兩個關鍵報錯：
-1. `Unknown name "inputAudioTranscription" at 'setup.generation_config'`：這是一個 JSON Payload 結構配置錯誤。
-2. `models/gemini-3.5-flash is not found for API version v1beta`：這是一個模型選用錯誤。
-
-### 2. 直擊痛點：解決 macOS 多聲道音訊記憶體拷貝 Bug
-除了連線問題，AGY CLI 還注意到日誌中音訊區塊的發送狀態：`是否為靜音(全0): true`。它隨即自主開啟了 [AudioCaptureManager.swift](file:///Users/al03034132/Documents/gemini-live-api-examples/gemini-live-translate-livekit/swift-demo/AudioCaptureManager.swift) 來查看音訊緩衝區的處理 logic。
-
-它發現程式在處理 `ScreenCaptureKit` 傳回的立體聲/多聲道音訊時，因為使用了靜態大小分配的 `AudioBufferList`，導致複製多聲道資料時記憶體溢位而截斷成全空值（靜音）。
-
-AGY CLI 隨即提出了**「雙呼叫 (Double-Call)」暫存器分配方案**，並直接對 [AudioCaptureManager.swift](file:///Users/al03034132/Documents/gemini-live-api-examples/gemini-live-translate-livekit/swift-demo/AudioCaptureManager.swift) 與 [GeminiLiveConnection.swift](file:///Users/al03034132/Documents/gemini-live-api-examples/gemini-live-translate-livekit/swift-demo/GeminiLiveConnection.swift) 進行了精確的程式碼重寫。
-
-這項修改涉及到了 Swift 的 `UnsafeMutablePointer` 指針操作以及 macOS 的 Core Audio 框架，若是人類開發者手動查閱文檔並撰寫，通常需要耗費數小時；而 AGY CLI 在不到一分鐘內即完成重構並成功修復！
+收到指令後，AGY CLI 發揮了架構師的角色，迅速分析並給出了一套 macOS 原生的解決方案：
+- **不用安裝虛擬音效卡**：推薦使用 Apple 在 macOS 13+ 推出的 **ScreenCaptureKit** 框架，直接以 Sandbox 安全模式擷取選定應用程式（如 Zoom 或 Chrome）的純淨音軌。
+- **即時音訊重採樣**：利用 `AVAudioConverter` 將多聲道/立體聲的 48kHz 音訊，實時重採樣為 Gemini Live 支援的 16kHz 單聲道 PCM 格式。
+- **雙向 WebSocket 通訊**：利用 Swift 的 `URLSessionWebSocketTask` 實作雙向長連接，一邊傳送 PCM 音訊塊，一邊接收繁體中文翻譯結果與播報音訊。
 
 ---
 
-# 自動化 DevOps：從撰寫文檔到 GitHub 推送
+# 階段二：環境配置與編譯焦慮消除
 
-程式碼修改完畢且測試成功後，我們向 AGY CLI 提出了進一步的發布需求：
-> **User**: 我要把 swift-demo 資料夾另外 checkin 到我自己的 GitHub repo。給我建議的 repo 名稱，並且寫一個 README.md 在 swift-demo 底下。
+在開始動手寫 Swift 代碼前，開發者對於 macOS 的編譯環境提出了疑問：
 
-此時，AGY CLI 的自主代理能力得到了最完美的展現：
+> **User**: 我是不是一定要有 xcode 才能 compile?
+> 
+> **User**: 幫我跑 xcode-select --install
 
-1. **命名與描述建議**：它提出了 `gemini-live-translate-macos` 這個貼切的 Repository 名稱，並主動提供了 GitHub 專案的英文 description 與分類 topics。
-2. **自動撰寫技術文檔**：它自動撰寫了排版精美的 [README.md](file:///Users/al03034132/Documents/gemini-live-api-examples/gemini-live-translate-livekit/swift-demo/README.md)（涵蓋詳細的 Xcode Sandbox 權限設定與 `build_app.sh` 命令行編譯說明）以及技術部落格。
-3. **一鍵完成 Git 初始化與遠端推送**：
-   在得到遠端 Git 地址（`git@github.com:kkdai/gemini-live-translate-macos.git`）後，AGY CLI 主動在終端機內串接並執行了以下複合指令：
-   ```bash
-   git init && \
-   echo "MeetingTranslator.app/" >> .gitignore && \
-   echo "debug.log" >> .gitignore && \
-   git add .gitignore *.swift build_app.sh README.md ... && \
-   git commit -m "Initial commit..." && \
-   git branch -M main && \
-   git remote add origin git@github.com:kkdai/... && \
-   git push -u origin main
-   ```
-   使用者只需要在 CLI 中點擊 **Approve**，AGY CLI 就在幾秒鐘內幫我們建置好了一個完整的 GitHub 開源專案！
+面對開發者的環境焦慮，AGY CLI 給出了解答：
+- 雖然建立標準的 macOS SwiftUI GUI 應用程式包最好使用 Xcode，但我們**並不一定需要手動開啟 Xcode IDE**。
+- AGY CLI 協助撰寫了一個自動建置腳本 `build_app.sh`，直接調用終端機的 `swiftc` 命令列工具來編譯所有 `.swift` 原始檔，並自動打包成完整的 `.app` 目錄結構。
+- 同時，對於開發者要求安裝 Command Line Tools 的請求，AGY CLI 主動呼叫了權限工具，直接在本地運行了 `xcode-select --install`，自動配置好 Swift 編譯環境。
 
 ---
 
-# 開發變革與心得
+# 階段三：連線排障與音訊 Bug 修復
 
-透過這一次與 AGY CLI 的合作開發，我們總結出以下幾點極致的開發體驗變革：
+當代碼初步完成後，開發者在命令列執行了 App，然而連線狀態卻顯示異常，且沒有任何字元翻譯出來：
 
-### 1. 認知負載 (Cognitive Load) 歸零
-開發者不需要再分神去處理「如何複製程式碼給 AI」、「如何把 AI 給的程式碼剪貼回專案」等重複性動作。AGY CLI 直接作為你的 terminal shell 與 editor 的延伸，你只需專注於**「下達高層級的設計與排錯指令」**。
+> **User**: 沒看到任何錯誤訊息～但是連線狀態是中斷
 
-### 2. 原生系統級的掌控
-由於代理人能夠直接讀取並執行命令行，它能實時與你的開發環境同步（例如讀取編譯失敗日誌、確認 git 狀態、直接編譯代碼）。這讓 AI 的修復建議是「絕對與你當前系統狀態相符的」，極大地減少了以往 Web AI Chat 容易產生的幻覺與環境版本不符的問題。
+這時便是 AGY CLI 展示「自主排錯」威力的時刻。收到提示後，它自動定位了 `debug.log` 檔案，呼叫 `tail` 分析運行時日誌，找出了兩個致命問題：
 
-### 3. 一站式交付體驗
-從排錯、代碼優化、撰寫文檔到自動推送 GitHub 倉庫，AGY CLI 將整個軟體工程的生命週期緊密地縫合在一個工作流中。這種「對話即交付」的體驗，正是未來軟體開發的新常態。
+1. **模型名稱不相容**：原程式填寫了標準 REST 模型 `models/gemini-3.5-flash`，而 Live WebSocket API 僅接受 `gemini-3.5-live-translate-preview`。
+2. **JSON 設定層級出錯**：API 文件使用的是 `v1alpha` 版本 SDK，將 `inputAudioTranscription` 包在 `generationConfig` 中；然而原生 WebSocket 的 `v1beta` 端點要求這兩個欄位必須放在 `setup` 根目錄下。這就是導致 `CloseCode 1007` 閃退的元凶。
+3. **多聲道立體聲靜音 Bug**：`ScreenCaptureKit` 擷取到的多聲道音軌，在舊版代碼中因為 AudioBufferList 記憶體配置不足，拷貝時被截斷成全為 0 的靜音。
+
+AGY CLI 隨即主動修改了 [AudioCaptureManager.swift](file:///Users/al03034132/Documents/gemini-live-api-examples/gemini-live-translate-livekit/swift-demo/AudioCaptureManager.swift)，引入**「雙呼叫 (Double-Call)」暫存器分配指針技術**，並重構了 [GeminiLiveConnection.swift](file:///Users/al03034132/Documents/gemini-live-api-examples/gemini-live-translate-livekit/swift-demo/GeminiLiveConnection.swift) 的 Payload 結構。
+
+修改完成後，應用程式順利運行，控制台日誌終於印出 `是否為靜音(全0): false`，且即時雙語字幕與即時播報語音均能順利作動！
 
 ---
 
-# 結論
+# 階段四：自動化 DevOps 與 GitHub 交付
 
-AI 程式助理已經從簡單的「程式碼自動補全（Auto-complete）」演進到如今「自動化代理人（Autonomous Agent）」的時代。藉由像 AGY CLI (Antigravity) 這樣的工具，一個人在一下午內打造、測試並發布一個 Native macOS App 不再是難事。
+當開發者確認程式可以正常工作後，最後一步是將程式碼開源分享：
 
-如果您也想體驗極速的命令行開發，不妨也給自己配置一個 AGY CLI 助手，我們下期見！
+> **User**: 我要把 swift-demo 資料夾另外 checkin 到我自己的 github repo，給我建議的 repo 名稱，並且寫一個 README.md 在 swift-demo 底下。
+> 
+> **User**: 幫我把該資料夾相關變動都寫進 git@github.com:kkdai/gemini-live-translate-macos.git
+
+AGY CLI 立刻接手了最後的 DevOps 工作：
+1. 它推薦使用 `gemini-live-translate-macos` 做為 Repo 名稱，並撰寫了專案的英文 GitHub description 與 topics 標籤。
+2. 它自動在 [README.md](file:///Users/al03034132/Documents/gemini-live-api-examples/gemini-live-translate-livekit/swift-demo/README.md) 中補齊了完整的環境準備、Xcode 沙盒 Capabilities 設定、命令行腳本執行步驟與 API 排雷提示。
+3. 獲得使用者的倉庫網址後，AGY CLI 主動在背景執行 `git init`，撰寫 `.gitignore`，將所有程式碼進行 commit，並順利 push 至遠端 GitHub 倉庫！
+
+---
+
+# 結語：開發變革與心得
+
+透過這次與 AGY CLI 的合作開發，我們體驗到了前所未有的極速開發流程：
+
+* **認知負載降低**：開發者只需用自然語言表達意圖（如「幫我跑安裝」、「幫我排查為什麼連線中斷」），AI Agent 就會自主翻譯為對應的系統命令與程式碼修改。
+* **原生系統級的掌控**：AI 能直接讀取並執行命令，實時與開發環境同步，極大地減少了以往 Web AI Chat 容易產生的幻覺與環境版本不符的問題。
+* **一站式交付**：從第一句「思考該怎麼做」到最後一鍵「Push 到 GitHub 倉庫」，AGY CLI 完美縫合了整個軟體工程生命週期。
+
+這項實戰體驗證明，在 Agentic AI 的時代下，一位開發者配合一個強大的 CLI 代理人，就能用極短的時間，高品質地交付一個涉及系統底層與最新 API 的 Native 應用程式。我們下期見！
