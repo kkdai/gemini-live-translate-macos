@@ -97,7 +97,45 @@ class TranslatorViewModel: ObservableObject, AudioCaptureDelegate, GeminiLiveCon
         geminiConnection = nil
         
         playbackManager.stop()
+        exportTranscript()
         status = "已停止"
+    }
+
+    private func exportTranscript() {
+        guard !subtitleHistory.isEmpty else { return }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd-HH-mm"
+        let timestamp = formatter.string(from: Date())
+        let filename = "meeting-\(timestamp).md"
+
+        let desktopURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Desktop")
+            .appendingPathComponent(filename)
+
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateFormat = "yyyy-MM-dd HH:mm"
+        let displayDate = displayFormatter.string(from: Date())
+
+        var lines = ["# 會議翻譯記錄", "日期：\(displayDate)", "", "---", ""]
+        for line in subtitleHistory {
+            if !line.originalText.isEmpty {
+                lines.append("> \(line.originalText)")
+            }
+            if !line.translatedText.isEmpty {
+                lines.append(line.translatedText)
+            }
+            lines.append("")
+        }
+
+        let content = lines.joined(separator: "\n")
+
+        do {
+            try content.write(to: desktopURL, atomically: true, encoding: .utf8)
+            self.status = "已儲存：~/Desktop/\(filename)"
+        } catch {
+            self.status = "匯出失敗：\(error.localizedDescription)"
+        }
     }
     
     // MARK: - AudioCaptureDelegate
@@ -149,10 +187,6 @@ class TranslatorViewModel: ObservableObject, AudioCaptureDelegate, GeminiLiveCon
                 if !self.currentLine.originalText.isEmpty || !self.currentLine.translatedText.isEmpty {
                     self.subtitleHistory.append(self.currentLine)
                     self.currentLine = SubtitleLine()
-                    
-                    if self.subtitleHistory.count > 25 {
-                        self.subtitleHistory.removeFirst()
-                    }
                 }
             }
         }
