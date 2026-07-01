@@ -88,25 +88,23 @@ class TranslatorViewModel: ObservableObject, AudioCaptureDelegate, GeminiLiveCon
     
     func stop() {
         isRunning = false
-        
-        Task {
-            await captureManager.stopCapture()
-        }
-        
+        Task { await captureManager.stopCapture() }
         geminiConnection?.disconnect()
         geminiConnection = nil
-        
         playbackManager.stop()
-        exportTranscript()
-        status = "已停止"
+        if !exportTranscript() {
+            status = "已停止"
+        }
     }
 
-    private func exportTranscript() {
-        guard !subtitleHistory.isEmpty else { return }
+    @discardableResult
+    private func exportTranscript() -> Bool {
+        guard !subtitleHistory.isEmpty else { return false }
 
+        let now = Date()
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HH-mm"
-        let timestamp = formatter.string(from: Date())
+        let timestamp = formatter.string(from: now)
         let filename = "meeting-\(timestamp).md"
 
         let desktopURL = FileManager.default.homeDirectoryForCurrentUser
@@ -115,7 +113,7 @@ class TranslatorViewModel: ObservableObject, AudioCaptureDelegate, GeminiLiveCon
 
         let displayFormatter = DateFormatter()
         displayFormatter.dateFormat = "yyyy-MM-dd HH:mm"
-        let displayDate = displayFormatter.string(from: Date())
+        let displayDate = displayFormatter.string(from: now)
 
         var lines = ["# 會議翻譯記錄", "日期：\(displayDate)", "", "---", ""]
         for line in subtitleHistory {
@@ -136,6 +134,7 @@ class TranslatorViewModel: ObservableObject, AudioCaptureDelegate, GeminiLiveCon
         } catch {
             self.status = "匯出失敗：\(error.localizedDescription)"
         }
+        return true
     }
     
     // MARK: - AudioCaptureDelegate
