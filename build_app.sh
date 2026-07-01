@@ -41,7 +41,13 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# 3. 建立 Info.plist
+# 3. 複製 App Icon
+if [ -f "AppIcon.icns" ]; then
+  echo "🎨 複製 App Icon..."
+  cp "AppIcon.icns" "${RESOURCES_DIR}/AppIcon.icns"
+fi
+
+# 4. 建立 Info.plist
 echo "📝 產生 Info.plist..."
 cat <<EOF > "${CONTENTS_DIR}/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -62,6 +68,8 @@ cat <<EOF > "${CONTENTS_DIR}/Info.plist"
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
 </dict>
 </dict>
 </plist>
