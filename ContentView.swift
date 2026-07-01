@@ -1,5 +1,5 @@
 import SwiftUI
-import ScreenCaptureKit
+@preconcurrency import ScreenCaptureKit
 
 struct SubtitleLine: Identifiable, Equatable {
     let id = UUID()
@@ -7,7 +7,8 @@ struct SubtitleLine: Identifiable, Equatable {
     var translatedText: String = ""
 }
 
-class TranslatorViewModel: ObservableObject, AudioCaptureDelegate, GeminiLiveConnectionDelegate {
+@MainActor
+class TranslatorViewModel: ObservableObject, @preconcurrency AudioCaptureDelegate, @preconcurrency GeminiLiveConnectionDelegate {
     @Published var apiKey: String = ""
     @Published var status: String = "未連線"
     
@@ -43,16 +44,14 @@ class TranslatorViewModel: ObservableObject, AudioCaptureDelegate, GeminiLiveCon
     func refreshApps() {
         Task {
             let apps = await captureManager.fetchShareableApps()
-            DispatchQueue.main.async {
-                self.shareableApps = apps
-                if self.selectedApp == nil, let firstApp = apps.first(where: { 
-                    let name = $0.applicationName
-                    return name.contains("Zoom") || name.contains("Chrome") || name.contains("Safari") || name.contains("Meet") || name.contains("Teams")
-                }) {
-                    self.selectedApp = firstApp
-                } else if self.selectedApp == nil {
-                    self.selectedApp = apps.first
-                }
+            self.shareableApps = apps
+            if self.selectedApp == nil, let firstApp = apps.first(where: {
+                let name = $0.applicationName
+                return name.contains("Zoom") || name.contains("Chrome") || name.contains("Safari") || name.contains("Meet") || name.contains("Teams")
+            }) {
+                self.selectedApp = firstApp
+            } else if self.selectedApp == nil {
+                self.selectedApp = apps.first
             }
         }
     }

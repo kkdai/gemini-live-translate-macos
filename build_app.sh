@@ -24,9 +24,11 @@ fi
 
 echo "SDK 路徑: $SDK_PATH"
 
-echo "🛠 開始編譯 Swift 檔案..."
+ARCH=$(uname -m)
+echo "🛠 開始編譯 Swift 檔案 (target: ${ARCH}-apple-macos13.0)..."
 swiftc \
   -sdk "$SDK_PATH" \
+  -target "${ARCH}-apple-macos13.0" \
   -O \
   -o "${MAC_OS_DIR}/${APP_NAME}" \
   TranslatorApp.swift \
