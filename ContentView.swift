@@ -193,7 +193,7 @@ class TranslatorViewModel: ObservableObject, AudioCaptureDelegate, GeminiLiveCon
 }
 
 struct ContentView: View {
-    @StateObject private var viewModel = TranslatorViewModel()
+    @ObservedObject var viewModel: TranslatorViewModel
     
     var body: some View {
         VStack(spacing: 14) {

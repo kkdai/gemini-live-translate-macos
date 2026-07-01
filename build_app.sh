@@ -33,7 +33,8 @@ swiftc \
   ContentView.swift \
   AudioCaptureManager.swift \
   AudioPlaybackManager.swift \
-  GeminiLiveConnection.swift
+  GeminiLiveConnection.swift \
+  FloatingSubtitleWindow.swift
 
 if [ $? -ne 0 ]; then
   echo "❌ 編譯失敗！"
