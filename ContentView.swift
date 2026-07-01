@@ -135,6 +135,10 @@ class TranslatorViewModel: ObservableObject, AudioCaptureDelegate, GeminiLiveCon
     func didUpdateConnectionStatus(_ status: String) {
         self.status = status
     }
+
+    func didPermanentlyDisconnect() {
+        isRunning = false
+    }
     
     private func checkAndRotateSubtitle(text: String) {
         let sentenceEndings = ["。", "？", "！", ".", "?", "!", "\n"]
