@@ -24,18 +24,26 @@ class AudioCaptureManager: NSObject, SCStreamOutput {
     }()
 
     /// 獲取目前系統中所有運行且有音訊輸出的應用程式
-    func fetchShareableApps() async -> [SCRunningApplication] {
+    /// - Returns: (apps, errorMessage) — errorMessage 非 nil 表示權限被拒或發生錯誤
+    func fetchShareableApps() async -> (apps: [SCRunningApplication], error: String?) {
         do {
             let content = try await SCShareableContent.current
-            return content.applications.filter { app in
+            let apps = content.applications.filter { app in
                 let name = app.applicationName
                 guard !name.isEmpty else { return false }
                 let bundleId = app.bundleIdentifier
                 return !bundleId.hasPrefix("com.apple.system") && bundleId != Bundle.main.bundleIdentifier
             }.sorted { $0.applicationName < $1.applicationName }
+            return (apps, nil)
         } catch {
-            print("無法獲取可共享內容: \(error)")
-            return []
+            let nsError = error as NSError
+            print("fetchShareableApps 失敗 — domain: \(nsError.domain), code: \(nsError.code), desc: \(error.localizedDescription)")
+            // SCStreamError.userDeclined = -3801
+            let isPermissionDenied = nsError.code == -3801
+            let message = isPermissionDenied
+                ? "需要螢幕錄製權限：請至「系統設定 > 隱私權與安全性 > 螢幕錄製」開啟授權"
+                : "無法取得 App 清單（code \(nsError.code)）：\(error.localizedDescription)"
+            return ([], message)
         }
     }
 

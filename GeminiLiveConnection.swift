@@ -62,7 +62,7 @@ class GeminiLiveConnection: NSObject, URLSessionWebSocketDelegate {
         guard let wsUrl = URL(string: wsUrlString) else { return }
 
         let statusMsg = reconnectAttempts == 0 ? "連線中..." : "重新連線中... (第 \(reconnectAttempts) 次)"
-        delegate?.didUpdateConnectionStatus(statusMsg)
+        DispatchQueue.main.async { self.delegate?.didUpdateConnectionStatus(statusMsg) }
 
         webSocketTask = session.webSocketTask(with: wsUrl)
         webSocketTask?.resume()
@@ -224,7 +224,7 @@ class GeminiLiveConnection: NSObject, URLSessionWebSocketDelegate {
                         self.isConnected = true
                         self.reconnectAttempts = 0
                         self.startPingTimer()
-                        self.delegate?.didUpdateConnectionStatus("已連線 (即時翻譯中)")
+                        DispatchQueue.main.async { self.delegate?.didUpdateConnectionStatus("已連線 (即時翻譯中)") }
                     }
                 }
             }
@@ -340,6 +340,16 @@ extension GeminiLiveConnection: URLSessionTaskDelegate {
         print("❌ WebSocket 被 Gemini 伺服器關閉 (CloseCode: \(closeCode.rawValue), 原因: \(reasonString))")
 
         guard !isIntentionalDisconnect else { return }
+
+        // CloseCode 1008 = Policy Violation：通常是模型名稱錯誤或 API Key 無效，屬於設定問題，不重連
+        if closeCode.rawValue == 1008 {
+            DispatchQueue.main.async {
+                self.delegate?.didUpdateConnectionStatus("連線失敗：\(reasonString)")
+                self.delegate?.didPermanentlyDisconnect()
+            }
+            return
+        }
+
         scheduleReconnect()
     }
 

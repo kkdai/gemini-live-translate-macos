@@ -72,11 +72,28 @@ cat <<EOF > "${CONTENTS_DIR}/Info.plist"
     <true/>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
-</dict>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>MeetingTranslator 需要螢幕錄製權限，以便擷取會議應用程式的音訊進行即時翻譯。</string>
 </dict>
 </plist>
 EOF
 
+# 5. Ad-hoc 簽名（ScreenCaptureKit 需要簽名才能出現在系統隱私設定清單中）
+echo "🔏 進行 ad-hoc 簽名..."
+codesign --sign - --force --deep --preserve-metadata=entitlements "${APP_DIR}"
+
+if [ $? -ne 0 ]; then
+  echo "⚠️  簽名失敗，App 可能無法取得螢幕錄製權限"
+else
+  echo "✅ 簽名完成"
+fi
+
 echo "✅ 打包完成！"
-echo "👉 您可以執行以下指令開啟 App:"
+
+# 每次重新簽名後 TCC 身分會改變，自動重置讓系統重新觸發授權彈窗
+echo "🔄 重置螢幕錄製權限（ad-hoc 簽名每次都會更換身分）..."
+tccutil reset ScreenCapture com.poc.MeetingTranslator 2>/dev/null && echo "   ✅ 已重置，開啟 App 後系統會重新詢問授權" || true
+
+echo ""
+echo "👉 執行以下指令開啟 App（首次開啟後點『↻』會跳出螢幕錄製授權對話框）:"
 echo "   open ${APP_DIR}"

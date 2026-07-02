@@ -43,15 +43,18 @@ class TranslatorViewModel: ObservableObject, @preconcurrency AudioCaptureDelegat
     
     func refreshApps() {
         Task {
-            let apps = await captureManager.fetchShareableApps()
-            self.shareableApps = apps
-            if self.selectedApp == nil, let firstApp = apps.first(where: {
+            let result = await captureManager.fetchShareableApps()
+            self.shareableApps = result.apps
+            if let errMsg = result.error {
+                self.status = errMsg
+            }
+            if self.selectedApp == nil, let firstApp = result.apps.first(where: {
                 let name = $0.applicationName
                 return name.contains("Zoom") || name.contains("Chrome") || name.contains("Safari") || name.contains("Meet") || name.contains("Teams")
             }) {
                 self.selectedApp = firstApp
             } else if self.selectedApp == nil {
-                self.selectedApp = apps.first
+                self.selectedApp = result.apps.first
             }
         }
     }

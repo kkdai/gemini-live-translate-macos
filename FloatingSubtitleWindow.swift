@@ -6,11 +6,13 @@ class FloatingSubtitleWindow: NSPanel {
 
     init(viewModel: TranslatorViewModel) {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 72),
-            styleMask: [.nonactivatingPanel, .fullSizeContentView, .titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 120),
+            styleMask: [.nonactivatingPanel, .fullSizeContentView, .titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
+        minSize = NSSize(width: 400, height: 70)
+        maxSize = NSSize(width: 1200, height: 300)
 
         isFloatingPanel = true
         level = .floating
@@ -85,27 +87,29 @@ struct FloatingSubtitleView: View {
     @ObservedObject var viewModel: TranslatorViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             if !viewModel.currentLine.originalText.isEmpty {
                 Text(viewModel.currentLine.originalText)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.6))
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if !viewModel.currentLine.translatedText.isEmpty {
                 Text(viewModel.currentLine.translatedText)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if viewModel.currentLine.originalText.isEmpty && viewModel.currentLine.translatedText.isEmpty {
                 Text("等待翻譯...")
-                    .font(.system(size: 14))
+                    .font(.system(size: 15))
                     .foregroundColor(.white.opacity(0.4))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(minWidth: 300, maxWidth: 600, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
